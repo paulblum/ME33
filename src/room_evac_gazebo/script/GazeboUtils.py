@@ -7,6 +7,10 @@ import math
 import time
 
 class DiffDriveControl:
+    """
+    An interface for the navigation of differential-drive robots in Gazebo.
+    """
+
     def __init__(self):
         rospy.init_node('diff_drive_control')
         self.model_state_subscriber = rospy.Subscriber('/odom', Odometry, self.__update_state)
@@ -16,6 +20,10 @@ class DiffDriveControl:
         self.r.sleep()
 
     def __update_state(self, msg):
+        """
+        Called automatically via subscription to '/odom' ROS channel.
+        Updates internal tracking of the robot's positional state.
+        """
         pos = msg.pose.pose.position
         q = msg.pose.pose.orientation
         (roll, pitch, yaw) = quaternion_to_euler(q.x, q.y, q.z, q.w)
@@ -25,10 +33,28 @@ class DiffDriveControl:
         self.heading = yaw
 
     def stop(self):
+        """
+        Command the robot to stop moving.
+        Returns the robot's final positional state.
+
+        Returns:
+            [float] final x-coordinate (meters)
+            [float] final y-coordinate (meters)
+            [float] final heading (radians)
+        """
         self.cmd_vel_publisher.publish(Twist())
         return self.x, self.y, self.heading
 
     def set_state(self, x, y, heading = 0):
+        """
+        Change the robot's absolute positional state.
+        Movement is instantaneous; robot spawns stopped in its new position.
+
+        Parameters:
+            x: target x-coordinate (meters, absolute)
+            y: target y-coordinate (meters, absolute)
+            heading: target heading (radians, absolute)
+        """
         state = ModelState()
         state.model_name = "basicjetbot"
         pos = state.pose.position
@@ -38,40 +64,96 @@ class DiffDriveControl:
         q.x, q.y, q.z, q.w = euler_to_quaternion(0, 0, math.radians(heading))
         self.model_state_publisher.publish(state)
 
-    def rotate_to(self, target, tol = 0.04, max_speed = 4, kP = 10.0):
+    def rotate_to(self, heading, tol=0.04, max_speed=4, kP=10):
+        """
+        Command the robot to rotate itself to some absolute heading, then stop.
+        Returns the robot's final positional state.
+
+        Parameters:
+            heading: target heading (radians, absolute)
+            tol: final heading tolerance (radians)
+            max_speed: maximum rotational speed (radians/second)
+            kP: proportional gain constant
+
+        Returns:
+            [float] final x-coordinate (meters)
+            [float] final y-coordinate (meters)
+            [float] final heading (radians)
+        """
         cmd = Twist()
 
         while True:
-            rad_remaining = normalize(target - self.heading)
+            err = normalize(heading - self.heading)
             
-            if abs(rad_remaining) < tol:
+            if abs(err) < tol:
                 return self.stop()
             
-            cmd.angular.z = min(max(kP * rad_remaining, -max_speed), max_speed)
+            cmd.angular.z = min(max(kP * err, -max_speed), max_speed)
 
             self.cmd_vel_publisher.publish(cmd)
             self.r.sleep()
 
     def move_to(self, x, y, tol = 0.04, max_speed = 0.6, kP_lin = 1.5, kP_rot = 7.0):
+        """
+        Command the robot to move itself to a set of absolute x-y coordinates, then stop.
+        Returns the robot's final positional state.
+
+        Parameters:
+            x: target x-coordinate (meters, absolute)
+            y: target y-coordinate (meters, absolute)
+            tol: final position tolerance (meters)
+            max_speed: maximum linear speed (meters/second)
+            kP_lin: proportional gain constant for linear movement
+            kP_rot: proportional gain constant for rotational corrections
+        
+        Returns:
+            [float] final x-coordinate (meters)
+            [float] final y-coordinate (meters)
+            [float] final heading (radians)
+        """
         cmd = Twist()
 
         self.rotate_to(math.atan2(y - self.y, x - self.x), tol = 0.07)
 
         while True:
-            dist_remaining = math.sqrt((x - self.x)**2 + (y - self.y)**2)
+            err = math.sqrt((x - self.x)**2 + (y - self.y)**2)
 
-            if dist_remaining < tol:
+            if err < tol:
                 return self.stop()
             
             x_err = x - self.x
             y_err = y - self.y
             cmd.angular.z = kP_rot * normalize(math.atan2(y_err, x_err) - self.heading)
-            cmd.linear.x = min(kP_lin * dist_remaining, max_speed)
+            cmd.linear.x = min(kP_lin * err, max_speed)
 
             self.cmd_vel_publisher.publish(cmd)
             self.r.sleep()
 
+    def move_forward(self, distance, tol = 0.04, max_speed = 0.6, kP_lin = 1.5, kP_rot = 7.0):
+        """
+        Command the robot to move itself forward some distance, then stop.
+        Returns the robot's final positional state.
+
+        Parameters:
+            distance: forward distance (meters)
+            tol: final position tolerance (meters)
+            max_speed: maximum linear speed (meters/second)
+            kP_lin: proportional gain constant for linear movement
+            kP_rot: proportional gain constant for rotational corrections
+        
+        Returns:
+            [float] final x-coordinate (meters)
+            [float] final y-coordinate (meters)
+            [float] final heading (radians)
+        """
+        x_target = self.x + distance * math.cos(self.heading)
+        y_target = self.y + distance * math.sin(self.heading)
+        return self.move_to(x_target, y_target, tol, max_speed, kP_lin, kP_rot)
+
 def normalize(radians):
+    """
+    Map an absolute radian angle to its equivalent value in the interval [-pi, pi].
+    """
     while radians > math.pi:
         radians -= 2*math.pi
     while radians < -math.pi:
@@ -79,6 +161,12 @@ def normalize(radians):
     return radians
 
 def euler_to_quaternion(roll, pitch, yaw):
+    """
+    Convert a set of Euler angles (roll, pitch, yaw) to a unit quaternion (x, y, z, w).
+
+    Algorithm source: 
+    https://en.wikipedia.org/wiki/Conversion_between_quaternions_and_Euler_angles#Euler_angles_to_quaternion_conversion
+    """
     cr = math.cos(roll/2)
     sr = math.sin(roll/2)
     cp = math.cos(pitch/2)
@@ -94,6 +182,12 @@ def euler_to_quaternion(roll, pitch, yaw):
     return x, y, z, w
 
 def quaternion_to_euler(x, y, z, w):
+    """
+    Convert a unit quaternion (x, y, z, w) to a set of Euler angles (roll, pitch, yaw).
+
+    Algorithm source: 
+    https://en.wikipedia.org/wiki/Conversion_between_quaternions_and_Euler_angles#Quaternion_to_Euler_angles_conversion
+    """
     sr_cp = 2 * (w*x + y*z)
     cr_cp = 1 - 2 * (x**2 + y**2)
     roll = math.atan2(sr_cp, cr_cp)
