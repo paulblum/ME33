@@ -2,9 +2,8 @@
 import rospy
 from nav_msgs.msg import Odometry
 from geometry_msgs.msg import Twist
-from gazebo_msgs.msg import ModelState
+from gazebo_msgs.msg import ModelState, ContactsState
 import math
-import time
 
 class DiffDriveControl:
     """
@@ -16,6 +15,7 @@ class DiffDriveControl:
         self.model_state_subscriber = rospy.Subscriber('/odom', Odometry, self.__update_state)
         self.model_state_publisher = rospy.Publisher('/gazebo/set_model_state', ModelState, queue_size=1)
         self.cmd_vel_publisher = rospy.Publisher('cmd_vel', Twist, queue_size=1)
+        self.contact_sensor_subscriber = rospy.Subscriber('/contact_sensor', ContactsState, self.__collision_check)
         self.r = rospy.Rate(10)
         self.r.sleep()
 
@@ -31,6 +31,13 @@ class DiffDriveControl:
         self.x = pos.x
         self.y = pos.y
         self.heading = yaw
+
+    def __collision_check(self, msg):
+        """
+        Called automatically via subscription to '/contact_sensor' ROS channel.
+        Updates internal tracking of the robot's current collision state.
+        """
+        self.collision = msg.states != []
 
     def stop(self):
         """
@@ -82,7 +89,7 @@ class DiffDriveControl:
         """
         cmd = Twist()
 
-        while True:
+        while not self.collision:
             err = normalize(heading - self.heading)
             
             if abs(err) < tol:
@@ -92,6 +99,9 @@ class DiffDriveControl:
 
             self.cmd_vel_publisher.publish(cmd)
             self.r.sleep()
+        
+        print("\n***** WARNING: collision detected *****\n")
+        return self.stop()
 
     def move_to(self, x, y, tol = 0.04, max_speed = 0.6, kP_lin = 1.5, kP_rot = 7.0):
         """
@@ -115,7 +125,7 @@ class DiffDriveControl:
 
         self.rotate_to(math.atan2(y - self.y, x - self.x), tol = 0.07)
 
-        while True:
+        while not self.collision:
             err = math.sqrt((x - self.x)**2 + (y - self.y)**2)
 
             if err < tol:
@@ -128,6 +138,9 @@ class DiffDriveControl:
 
             self.cmd_vel_publisher.publish(cmd)
             self.r.sleep()
+        
+        print("\n***** WARNING: collision detected *****\n")
+        return self.stop()
 
     def move_forward(self, distance, tol = 0.04, max_speed = 0.6, kP_lin = 1.5, kP_rot = 7.0):
         """
