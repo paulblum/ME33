@@ -5,6 +5,8 @@ from geometry_msgs.msg import Twist
 from gazebo_msgs.msg import ModelState, ContactsState
 import math
 
+FOOT = 0.3048 #meters
+
 class DiffDriveControl:
     """
     An interface for the navigation of differential-drive robots in Gazebo.

@@ -1,6 +1,3 @@
-####Evacuation_Continuum_Ob_center_DQN_Gazebo_Position.py
-####Training 1 agent for evacuation in Gazebo at 1 exit using Deep Q-Network
-
 from GazeboUtils import *
 
 control = DiffDriveControl()
@@ -9,132 +6,119 @@ control.stop()
 import numpy as np
 import tensorflow as tf
 from collections import deque
-# math import pi, acos
 import os
 import shutil
-#import time
 
-######Initialize systerm parameters
-fm_scalar = 0.3048
-agent_size = 0.135       #meters
-door_size = 0.5          #meters
+# ----- SIMULATION PARAMETERS -----
+# Reinforcement Learning:
+EPISODES = 1000     # max number of episodes to learn from
+MAX_STEPS = 100     # max steps in an episode
+GAMMA = 0.999       # future reward discount
+EXPLORE_MAX = 1.0  # maximum exploration probability
+EXPLORE_MIN = 0.1  # minimum exploration probability
+DECAY_PERCENT = 0.5 
+DECAY_RATE = 4/DECAY_PERCENT # exploration decay rate      
+LEARN_RATE = 1e-4 # Q-network learning rate
+STEP_RWD = -0.1
+EXIT_RWD = 100
+WALL_HIT_RWD = -100
 
-dis_lim = (door_size)/2      #set the distance from the exit which the agent is regarded as exited 
-reward = -0.1
-end_reward = 0.
+# Batch Memory:
+MEM_SIZE = 1000     # memory capacity
+BATCH_SIZE = 50     # experience mini-batch size
 
-######Initialize Exit positions range [0, 1]
-Exit = []  ###No exit
-Exit.append( fm_scalar*np.array([9, 4.5]) )  ##Add Right exit
+# Target Q-Network:
+UPDATE_TARGET_EVERY = 1   ###target update frequency
+TAU = 0.1                 ###target update factor
+SAVE_STEP = 1             ###steps to save the model
+TRAIN_STEP = 1            ###steps to train the model
 
-######Creating Model Saving Directory
-model_saved_path = './model'
+# Enviroment
+AGENT_SIZE = 0.5*FOOT
+EXITS = [[4.5*FOOT, 9*FOOT]]
+EXIT_WIDTH = 0.5 #meters
 
-if not os.path.isdir(model_saved_path):
-    os.mkdir(model_saved_path)
-    
-model_saved_path = model_saved_path + '/Continuum_Ob_Center_DQN_Dense_Hybrid'    
-name_mainQN = 'main_qn_ob_center'    
-name_targetQN = 'target_qn_ob_center'
+class Environment:
+    def __init__(self, xmin, xmax, ymin, ymax, step_size = 1*FOOT):
 
+        self.xmin_traversable = xmin + AGENT_SIZE
+        self.xmax_traversable = xmax - AGENT_SIZE
+        self.ymin_traversable = ymin + AGENT_SIZE
+        self.ymax_traversable = ymax - AGENT_SIZE
 
-class Environment:    
-    def __init__(self,  xmin = 0., xmax = 1., ymin = 0., ymax = 1., rot_deg = np.pi/4, step_size = fm_scalar):
-        
-        ####Robot initialization
-        self.size = agent_size
-        self.base = rot_deg
-        self.robot_pos = control.stop()[:2]
-        self.trajectory = 0
-
-        ####Set exit information
-        self.Exit = []
-        for e in Exit:            
-            self.Exit.append(e)
-   
-        ####Set action space        
-        self.action = np.array([np.pi/2, 3*np.pi/4, np.pi, -3*np.pi/4,
-                                -np.pi/2, -np.pi/4, 0., np.pi/4]) ## 8 actions
-        self.step_dis = step_size
-        
-        ####set reward
-        self.reward = reward     ###reward for taking each time step
-        self.end_reward = end_reward  ###reward for exit
-
-        self.xmin = xmin
-        self.xmax = xmax
-        self.ymin = ymin
-        self.ymax = ymax
+        self.x, self.y, _ = control.stop()
+        self.step_size = step_size
+        self.action_space = np.array([np.pi/2, 3*np.pi/4, np.pi, -3*np.pi/4,
+                                -np.pi/2, -np.pi/4, 0., np.pi/4])
         
     ####Reset initial configuration the Continuum cell space
     def reset(self):
-        
-#        self.robot_pos = self.initial_pos
 
-        x = np.random.uniform(self.xmin+self.size, self.xmax-self.size)
-        y = np.random.uniform(self.xmin-self.size, self.ymax-self.size)
-        theta = np.random.uniform(-np.pi,np.pi)
-        theta_degrees = theta*180/np.pi
+        self.x = np.random.uniform(self.xmin_traversable, self.xmax_traversable)
+        self.y = np.random.uniform(self.ymin_traversable, self.ymax_traversable)
+        heading = np.random.uniform(-np.pi,np.pi)
 
-        self.robot_pos = np.array([x,y])
-        self.trajectory = theta
-
-        
-        control.set_state(x,y, theta_degrees)
-
-        return (self.robot_pos[0], self.robot_pos[1])        
+        control.set_state(self.x, self.y, heading)
+        return [self.x, self.y]
 
     ####Choose random action from action list
     def choose_random_action(self):
         
-        action = np.random.choice(len(self.action))
-        return action
+        return np.random.choice(len(self.action_space))
 
     ###Updates position array and checks if exited   
     def step(self, action):
 
-        reward = self.reward
-        done = False
-        angle = self.action[action]       ####desired trajectroy 
-        
+        angle = self.action_space[action]
         control.rotate_to(angle)
-        self.robot_pos = control.move_forward(self.step_dis)[:2]
+        self.x, self.y, _ = control.move_forward(self.step_size)
 
-        for e in self.Exit:
-            exit_dis = self.robot_pos - e
-            exit_dis = np.sqrt(np.sum(exit_dis**2))
-            
-            if exit_dis < dis_lim:
-                done = True
-                reward = self.end_reward
-                break
+        if self.exited():
+            print("\n----- EXITED -----\n")
+            return (self.x, self.y), EXIT_RWD, True
         
-        next_state = (self.robot_pos[0], self.robot_pos[1])
-        
-        return next_state, reward, done                
-        
+        return [self.x, self.y], STEP_RWD, False   
+
+    def insta_step(self, action):
+
+        angle = self.action_space[action]
+        self.x += self.step_size * math.cos(angle)
+        self.y += self.step_size * math.sin(angle)
+        control.set_state(self.x, self.y, angle)
+
+        if self.exited():
+            print("\n----- EXITED -----\n")
+            return (self.x, self.y), EXIT_RWD, True
+
+        if self.x < self.xmin_traversable or self.x > self.xmax_traversable \
+            or self.y < self.ymin_traversable or self.y > self.ymax_traversable:
+
+            print("\n----- WALL COLLISION -----\n")
+            return (self.x, self.y), WALL_HIT_RWD, True
+
+        return [self.x, self.y], STEP_RWD, False
+
+    def exited(self):
+
+        for e in EXITS:
+            exit_dist =  math.sqrt((e[0] - self.x)**2 + (e[1] - self.y)**2)
+            if exit_dist < EXIT_WIDTH/2:
+                return True
+        return False
+
 class trfl:
-    def update_target_variables(target_variables,
-                            source_variables,
-                            tau=1.0,
-                            use_locking=False,
-                            name="update_target_variables"):
+    def update_target_variables(target_variables, source_variables, tau=1.0, use_locking=False, name="update_target_variables"):
     
         def update_op(target_variable, source_variable, tau):
-            if tau == 1.0:
-                return target_variable.assign(source_variable, use_locking)
-            else:
-                return target_variable.assign(tau * source_variable + (1.0 - tau) * target_variable, use_locking)
+            return target_variable.assign(tau * source_variable + (1.0 - tau) * target_variable, use_locking)
 
         with tf.compat.v1.name_scope(name, values=target_variables + source_variables):
-            update_ops = [update_op(target_var, source_var, tau)
-                  for target_var, source_var in zip(target_variables, source_variables)]
+            update_ops = [update_op(target_var, source_var, tau) for target_var, source_var in zip(target_variables, source_variables)]
         return tf.compat.v1.group(name="update_all_variables", *update_ops)
 
 
 class DQN:
-    def __init__(self, name, learning_rate=0.0001, gamma = 0.99,
-                 action_size=8, batch_size=20):
+    def __init__(self, name, learning_rate=0.0001, batch_size=20, gamma=0.99, action_size=8):
         
         self.name = name
         
@@ -197,167 +181,70 @@ class Memory():
 
 
 if __name__ == '__main__':
-    
-    train_episodes = 10        # max number of episodes to learn from
-    max_steps = 100                # max steps in an episode
-    gamma = 0.999                   # future reward discount
 
-    explore_start = 1.0            # exploration probability at start
-    explore_stop = 0.1            # minimum exploration probability 
-    decay_percentage = 0.5          
-    decay_rate = 4/decay_percentage ####exploration decay rate
-            
-    # Network parameters
-    learning_rate = 1e-4         # Q-network learning rate 
-    
-    # Memory parameters
-    memory_size = 1000          # memory capacity
-    batch_size = 50                # experience mini-batch size
-    pretrain_length = batch_size   # number experiences to pretrain the memory
-    
-    #target QN
-    update_target_every = 1   ###target update frequency
-    tau = 0.1                 ###target update factor
-    save_step = 1             ###steps to save the model
-    train_step = 1            ###steps to train the model
-
-    #jet = Jetbot()            ###instance of robot movement class
-    
-    env = Environment(0, 9*fm_scalar, 0, 9*fm_scalar)
-    state = env.reset()
-    
-    memory = Memory(max_size=memory_size)
-        
     tf.compat.v1.reset_default_graph()
     tf.compat.v1.disable_eager_execution()
+
+    env = Environment(0, 9*FOOT, 0, 9*FOOT)
+    memory = Memory(MEM_SIZE)
+    mainQN = DQN('main_qn', LEARN_RATE, BATCH_SIZE, GAMMA)
+    targetQN = DQN('target_qn', LEARN_RATE, BATCH_SIZE, GAMMA)
     
-    ####set mainQN for training and targetQN for updating
-    mainQN = DQN(name=name_mainQN, learning_rate=learning_rate,batch_size=batch_size, gamma = gamma)
-    targetQN = DQN(name=name_targetQN,  learning_rate=learning_rate,batch_size=batch_size, gamma = gamma)
- 
     #TRFL way to update the target network
-    target_network_update_ops = trfl.update_target_variables(targetQN.get_qnetwork_variables(),mainQN.get_qnetwork_variables(),tau=tau)
+    target_network_update_ops = trfl.update_target_variables(targetQN.get_qnetwork_variables(),mainQN.get_qnetwork_variables(),tau=TAU)
+    
+    with tf.compat.v1.Session() as sess:
 
-    init = tf.compat.v1.global_variables_initializer()
-    saver = tf.compat.v1.train.Saver(max_to_keep= 10) 
-    
-    ######GPU usage fraction
-    config = tf.compat.v1.ConfigProto()
-    config.gpu_options.per_process_gpu_memory_fraction = 0.4
-    
-    #####pretrain load
-#    name_list = []
-#    t_list = []
-#    for t in mainQN.get_qnetwork_variables():
-#        name_list.append('main_qn_2exits' + t.name[17:-2])
-#        t_list.append(t)
-#    
-#    var_dict = dict(zip(name_list, t_list))
-#    saver_load_main = tf.train.Saver(var_list = var_dict)
-#
-#    name_list = []
-#    t_list = []
-#    for t in targetQN.get_qnetwork_variables():
-#        name_list.append('main_qn_2exits' + t.name[19:-2])
-#        t_list.append(t)
-#    
-#    var_dict = dict(zip(name_list, t_list))
-#    saver_load_target = tf.train.Saver(var_list = var_dict)    
-    
-    ##############
-    
-    with tf.compat.v1.Session(config = config) as sess:
+        sess.run(tf.compat.v1.global_variables_initializer())
         
-        sess.run(init)
-        
-        ####check saved model to continue or start from initialiation
-        if not os.path.isdir(model_saved_path):
-            os.mkdir(model_saved_path)
-        
-        checkpoint = tf.train.get_checkpoint_state(model_saved_path)
-        if checkpoint and checkpoint.model_checkpoint_path:
-            saver.restore(sess, checkpoint.model_checkpoint_path)
-#            saver_load_main.restore(sess, checkpoint.all_model_checkpoint_paths[1])
-#            saver_load_target.restore(sess, checkpoint.all_model_checkpoint_paths[1])
-            print("Successfully loaded:", checkpoint.model_checkpoint_path)
-            
-            print("Removing check point and files")
-            for filename in os.listdir(model_saved_path):
-                filepath = os.path.join(model_saved_path, filename)
-                
-                try:
-                    shutil.rmtree(filepath)
-                except OSError:
-                    os.remove(filepath)
-                
-            print("Done")
-            
+        # restore DQN checkpoint, if provided
+        checkpoint_manager = tf.compat.v1.train.Saver()
+        ckpt_path = './tf_checkpoints/positional_DQN'
+        if not os.path.isdir(ckpt_path):
+            os.makedirs(ckpt_path)
+        ckpt = tf.train.get_checkpoint_state(ckpt_path)
+        if ckpt:
+            print("DQN restored from {}".format(ckpt.model_checkpoint_path))
+            checkpoint_manager.restore(sess, ckpt.model_checkpoint_path)
+            shutil.rmtree(ckpt_path) # delete old checkpoints
         else:
-            print("Could not find old network weights. Run with the initialization")
-            sess.run(init)
-        ####
+            print("No TF checkpoint files found... initializing DQN from scratch")
         
-        step = 0     
-        
-        # if not os.path.isdir(output_dir):
-        #     os.mkdir(output_dir)
-        
-        for ep in range(1, train_episodes+1):
-            total_reward = 0
-            t = 0            
-            
-            while t < max_steps:
-                print("time:", t, "position:", env.robot_pos)
-                ###### Explore or Exploit 
-                epsilon = explore_stop + (explore_start - explore_stop)*np.exp(-decay_rate*ep/train_episodes) 
-                feed_state = np.array(state)
-                print("STATE:")
-                print(feed_state)
-                
-                print("EPSILON: ",epsilon)
-                testttt = np.random.rand()
-                print("RAND: ",testttt)
-                if testttt < epsilon:   
-                    ####Get random action
-                    action= env.choose_random_action()                   
-                else:
-                    # Get action from Q-network
-                    feed = {mainQN.inputs_: feed_state[np.newaxis, :]}
-                    Qs = sess.run(mainQN.output, feed_dict=feed)[0]  
-                    print("Qs:")  
-                    for i in enumerate(Qs):
-                        print(i) 
+        # training
+        for episode in range(1, EPISODES+1):
 
-                    
-                    action_list = [idx for idx, val in enumerate(Qs) if val == np.max(Qs)]                    
-                    action = np.random.choice(action_list)
-                #######                
+            state = env.reset()
+            total_reward = 0
+            step = 0          
+            
+            while step < MAX_STEPS:
+
+                epsilon = EXPLORE_MIN + (EXPLORE_MAX - EXPLORE_MIN)*np.exp(-DECAY_RATE*episode/EPISODES) 
+
+                if np.random.rand() < epsilon: # EXPLORE
+                    action = env.choose_random_action()                   
+                else:                          # EXPLOIT
+                    q_values = sess.run(mainQN.output, feed_dict={mainQN.inputs_: [state]})[0]                  
+                    action = np.random.choice([idx for idx, val in enumerate(q_values) if val == np.max(q_values)])             
                 
-                next_state, reward, done = env.step(action)
-                                                
+                next_state, reward, done = env.insta_step(action)
+                memory.add((state, action, reward, next_state, done))                     
                 total_reward += reward
                 step += 1
-                t += 1
-                
-                state = next_state
-
-                feed_next_state = np.array(next_state)               
-                
-                memory.add((feed_state, action, reward, feed_next_state, done))
+                state = next_state             
                         
                 if done:
                     control.stop()
-                    print("Robot has exited")
                     break
             
-                if len(memory.buffer) == memory_size and t%train_step==0:
+                if len(memory.buffer) == MEM_SIZE and step%TRAIN_STEP==0:
                     # Sample mini-batch from memory
-                    batch = memory.sample(batch_size)
-                    states = np.array([each[0] for each in batch])
-                    actions = np.array([each[1] for each in batch])
-                    rewards = np.array([each[2] for each in batch])
-                    next_states = np.array([each[3] for each in batch])
-                    finish = np.array([each[4] for each in batch])
+                    batch = memory.sample(BATCH_SIZE)
+                    states = [mem[0] for mem in batch]
+                    actions = [mem[1] for mem in batch]
+                    rewards = [mem[2] for mem in batch]
+                    next_states = [mem[3] for mem in batch]
+                    finish = [mem[4] for mem in batch]
                     
                     # Train network
                     target_Qs = sess.run(targetQN.output, feed_dict={targetQN.inputs_: next_states})
@@ -365,22 +252,17 @@ if __name__ == '__main__':
                     target_Qs[finish == True] = 0.
                                         
                     #TRFL way, calculate td_error within TRFL
-                    loss, _ = sess.run([mainQN.loss, mainQN.opt],
-                                        feed_dict={mainQN.inputs_: states,
-                                                   mainQN.targetQs_: target_Qs,
-                                                   mainQN.reward: rewards,
-                                                   mainQN.actions_: actions})
-            
-         
-            if len(memory.buffer) == memory_size:
-                print("Episode: {}, Loss: {}, steps per episode: {}".format(ep,loss, t))
+                    loss = sess.run(mainQN.loss, feed_dict={mainQN.inputs_: states, mainQN.targetQs_: target_Qs,
+                                                            mainQN.reward: rewards, mainQN.actions_: actions})
+
+            if len(memory.buffer) == MEM_SIZE:
+                print("Episode: {}, Loss: {}, steps per episode: {}".format(episode, loss, step))
                 
-            if ep % save_step ==0:
-                saver.save(sess, os.path.join(model_saved_path, "Evacuation_Continuum_model.ckpt"), global_step = ep)
+            if episode % SAVE_STEP ==0:
+                checkpoint_manager.save(sess, os.path.join(ckpt_path, "positional_DQN.ckpt"), global_step=episode)
             
             #update target q network
-            if ep % update_target_every ==0:
+            if episode % UPDATE_TARGET_EVERY ==0:
                 sess.run(target_network_update_ops)
-#            
-#            
-        saver.save(sess, os.path.join(model_saved_path, "Evacuation_Continuum_model.ckpt"), global_step= train_episodes)
+          
+        checkpoint_manager.save(sess, os.path.join(ckpt_path, "positional_DQN.ckpt"), global_step=EPISODES)
