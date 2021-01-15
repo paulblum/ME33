@@ -31,12 +31,12 @@
   <!-- CONTACT SENSOR -->
   <gazebo reference="chassis">
     <sensor type="contact" name="contact_sensor">
-      <update_rate>10</update_rate>
+      <update_rate>20</update_rate>
       <contact>
         <collision>chassis_collision_collision</collision>
       </contact>
       <plugin name="gazebo_ros_bumper_controller" filename="libgazebo_ros_bumper.so">
-        <updateRate>10</updateRate>
+        <updateRate>20</updateRate>
         <bumperTopicName>/contact_sensor</bumperTopicName>
       </plugin>
     </sensor>

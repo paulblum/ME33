@@ -12,27 +12,27 @@ class DiffDriveControl:
 
     def __init__(self):
         rospy.init_node('diff_drive_control')
-        self.model_state_subscriber = rospy.Subscriber('/odom', Odometry, self.__update_state)
+        self.model_state_subscriber = rospy.Subscriber('/odom', Odometry, self._update_state)
         self.model_state_publisher = rospy.Publisher('/gazebo/set_model_state', ModelState, queue_size=1)
         self.cmd_vel_publisher = rospy.Publisher('cmd_vel', Twist, queue_size=1)
-        self.contact_sensor_subscriber = rospy.Subscriber('/contact_sensor', ContactsState, self.__collision_check)
+        self.contact_sensor_subscriber = rospy.Subscriber('/contact_sensor', ContactsState, self._collision_check)
         self.r = rospy.Rate(10)
         self.r.sleep()
 
-    def __update_state(self, msg):
+    def _update_state(self, msg):
         """
         Called automatically via subscription to '/odom' ROS channel.
         Updates internal tracking of the robot's positional state.
         """
         pos = msg.pose.pose.position
         q = msg.pose.pose.orientation
-        (roll, pitch, yaw) = quaternion_to_euler(q.x, q.y, q.z, q.w)
+        *_, yaw = quaternion_to_euler(q.x, q.y, q.z, q.w)
         
         self.x = pos.x
         self.y = pos.y
         self.heading = yaw
 
-    def __collision_check(self, msg):
+    def _collision_check(self, msg):
         """
         Called automatically via subscription to '/contact_sensor' ROS channel.
         Updates internal tracking of the robot's current collision state.
@@ -50,6 +50,7 @@ class DiffDriveControl:
             [float] final heading (radians)
         """
         self.cmd_vel_publisher.publish(Twist())
+        self.r.sleep()
         return self.x, self.y, self.heading
 
     def set_state(self, x, y, heading = 0):
@@ -68,8 +69,9 @@ class DiffDriveControl:
         q = state.pose.orientation
         pos.x = x
         pos.y = y
-        q.x, q.y, q.z, q.w = euler_to_quaternion(0, 0, math.radians(heading))
+        q.x, q.y, q.z, q.w = euler_to_quaternion(0, 0, heading)
         self.model_state_publisher.publish(state)
+        self.r.sleep()
 
     def rotate_to(self, heading, tol=0.04, max_speed=4, kP=10):
         """
