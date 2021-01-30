@@ -22,9 +22,9 @@
     In a new terminal, enter:
 
     ```
-    sudo apt-get install python3-catkin-pkg-modules
+    sudo apt-get install -y python3-catkin-pkg-modules
 
-    sudo apt-get install python3-rospkg-modules
+    sudo apt-get install -y python3-rospkg-modules
 
     git clone https://github.com/paulblum/ME33.git
 

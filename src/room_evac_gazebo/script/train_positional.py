@@ -1,104 +1,111 @@
-# ---- BROKEN ----
-
-from GazeboUtils import *
-
-control = DiffDriveControl()
-control.stop()
-
+from teleport_gazebo_model import *
 import numpy as np
 import tensorflow as tf
 from collections import deque
 import os
 import shutil
 
+USE_GAZEBO = True
+RESTORE_CKPT = False
+
 # ----- SIMULATION PARAMETERS -----
 # Reinforcement Learning:
-EPISODES = 1000     # max number of episodes to learn from
-MAX_STEPS = 100     # max steps in an episode
-GAMMA = 0.999       # future reward discount
-EXPLORE_MAX = 1.0  # maximum exploration probability
-EXPLORE_MIN = 0.1  # minimum exploration probability
+EPISODES = 10000
+MAX_STEPS = 100 # per episode
+GAMMA = 0.999 # future reward discount
+EXPLORE_MAX = 1.0 # exploration probability
+EXPLORE_MIN = 0.1  
 DECAY_PERCENT = 0.5 
-DECAY_RATE = 4/DECAY_PERCENT # exploration decay rate      
-LEARN_RATE = 1e-4 # Q-network learning rate
+DECAY_RATE = 4/DECAY_PERCENT    
+LEARN_RATE = 1e-4 
 STEP_RWD = -0.1
-EXIT_RWD = 100
-WALL_HIT_RWD = -100
+EXIT_RWD = 0
 
 # Batch Memory:
-MEM_SIZE = 1000     # memory capacity
-BATCH_SIZE = 50     # experience mini-batch size
+MEM_SIZE = 1000     
+BATCH_SIZE = 50     
 
 # Target Q-Network:
-UPDATE_TARGET_EVERY = 1   ###target update frequency
-TAU = 0.1                 ###target update factor
-SAVE_STEP = 1             ###steps to save the model
-TRAIN_STEP = 1            ###steps to train the model
+UPDATE_TARGET_EVERY = 1   
+TAU = 0.1 # target update factor     
+SAVE_STEP = 10000             
+TRAIN_STEP = 1            
+CKPT_PATH = './tf_checkpoints/positional_DQN'
 
 # Enviroment
-AGENT_SIZE = 0.5*FOOT
-EXITS = [[4.5*FOOT, 9*FOOT]]
-EXIT_WIDTH = 0.5 #meters
+AGENT_SIZE = 0.1*FOOT
+EXITS = [[0, 4*FOOT]]
+EXIT_WIDTH = 1*FOOT
 
 class Environment:
-    def __init__(self, xmin, xmax, ymin, ymax, step_size = 1*FOOT):
+    def __init__(self, xmin, xmax, ymin, ymax, step_size = 0.5*FOOT):
+
+        self.xmin = xmin
+        self.xmax = xmax
+        self.ymin = ymin
+        self.ymax = ymax
 
         self.xmin_traversable = xmin + AGENT_SIZE
         self.xmax_traversable = xmax - AGENT_SIZE
         self.ymin_traversable = ymin + AGENT_SIZE
         self.ymax_traversable = ymax - AGENT_SIZE
 
-        self.x, self.y, _ = control.stop()
+        if USE_GAZEBO:
+            self.teleport = Teleport()
+
         self.step_size = step_size
         self.action_space = np.array([np.pi/2, 3*np.pi/4, np.pi, -3*np.pi/4,
                                 -np.pi/2, -np.pi/4, 0., np.pi/4])
         
-    ####Reset initial configuration the Continuum cell space
     def reset(self):
 
         self.x = np.random.uniform(self.xmin_traversable, self.xmax_traversable)
         self.y = np.random.uniform(self.ymin_traversable, self.ymax_traversable)
         heading = np.random.uniform(-np.pi,np.pi)
 
-        control.set_state(self.x, self.y, heading)
+        if USE_GAZEBO:
+            collision = self.teleport.to(self.x, self.y, heading)
+
+            if collision:
+                print("collision on reset, trying again...")
+                return self.reset()
+
+        if self.out_of_bounds():
+            print("out of bounds on reset, trying again...")
+            return self.reset()
+
         return [self.x, self.y]
 
     ####Choose random action from action list
     def choose_random_action(self):
         
-        return np.random.choice(len(self.action_space))
+        return np.random.choice(len(self.action_space)) 
 
-    ###Updates position array and checks if exited   
     def step(self, action):
 
-        angle = self.action_space[action]
-        control.rotate_to(angle)
-        self.x, self.y, _ = control.move_forward(self.step_size)
-
-        if self.exited():
-            print("\n----- EXITED -----\n")
-            return (self.x, self.y), EXIT_RWD, True
-        
-        return [self.x, self.y], STEP_RWD, False   
-
-    def insta_step(self, action):
+        last_x = self.x
+        last_y = self.y
 
         angle = self.action_space[action]
         self.x += self.step_size * math.cos(angle)
         self.y += self.step_size * math.sin(angle)
-        control.set_state(self.x, self.y, angle)
+        
+        if USE_GAZEBO:
+            collision = self.teleport.to(self.x, self.y, angle)
+
+            if collision:
+                print ("RESULT: collision after teleporting to ({:.2f},{:.2f})".format(self.x, self.y))
+                return [last_x, last_y], STEP_RWD, False, True
 
         if self.exited():
-            print("\n----- EXITED -----\n")
-            return (self.x, self.y), EXIT_RWD, True
+            print("RESULT: exit")
+            return [self.x, self.y], EXIT_RWD, True, True
+        
+        if self.out_of_bounds():
+            print("RESULT: out of bounds")
+            return [last_x, last_y], STEP_RWD, False, True
 
-        if self.x < self.xmin_traversable or self.x > self.xmax_traversable \
-            or self.y < self.ymin_traversable or self.y > self.ymax_traversable:
-
-            print("\n----- WALL COLLISION -----\n")
-            return (self.x, self.y), WALL_HIT_RWD, True
-
-        return [self.x, self.y], STEP_RWD, False
+        return [self.x, self.y], STEP_RWD, False, False
 
     def exited(self):
 
@@ -107,7 +114,18 @@ class Environment:
             if exit_dist < EXIT_WIDTH/2:
                 return True
         return False
+    
+    def out_of_bounds(self):
+        if self.x < self.xmin_traversable or self.x > self.xmax_traversable \
+            or self.y < self.ymin_traversable or self.y > self.ymax_traversable:
+            return True
+        return False
 
+    def normalized(self, position):
+        x = position[0]/(self.xmax - self.xmin)
+        y = position[1]/(self.ymax - self.ymin)
+        return [x,y]
+        
 class trfl:
     def update_target_variables(target_variables, source_variables, tau=1.0, use_locking=False, name="update_target_variables"):
     
@@ -187,7 +205,7 @@ if __name__ == '__main__':
     tf.compat.v1.reset_default_graph()
     tf.compat.v1.disable_eager_execution()
 
-    env = Environment(0, 9*FOOT, 0, 9*FOOT)
+    env = Environment(-4*FOOT, 4*FOOT, -4*FOOT, 4*FOOT)
     memory = Memory(MEM_SIZE)
     mainQN = DQN('main_qn', LEARN_RATE, BATCH_SIZE, GAMMA)
     targetQN = DQN('target_qn', LEARN_RATE, BATCH_SIZE, GAMMA)
@@ -199,24 +217,25 @@ if __name__ == '__main__':
 
         sess.run(tf.compat.v1.global_variables_initializer())
         
-        # restore DQN checkpoint, if provided
+        # configure DQN checkpoints
         checkpoint_manager = tf.compat.v1.train.Saver()
-        ckpt_path = './tf_checkpoints/positional_DQN'
-        if not os.path.isdir(ckpt_path):
-            os.makedirs(ckpt_path)
-        ckpt = tf.train.get_checkpoint_state(ckpt_path)
-        if ckpt:
-            print("DQN restored from {}".format(ckpt.model_checkpoint_path))
-            checkpoint_manager.restore(sess, ckpt.model_checkpoint_path)
-            shutil.rmtree(ckpt_path) # delete old checkpoints
-        else:
-            print("No TF checkpoint files found... initializing DQN from scratch")
+        if not os.path.isdir(CKPT_PATH):
+            os.makedirs(CKPT_PATH)
+        if RESTORE_CKPT:
+            ckpt = tf.train.get_checkpoint_state(CKPT_PATH)
+            if ckpt:
+                print("DQN restored from {}".format(ckpt.model_checkpoint_path))
+                checkpoint_manager.restore(sess, ckpt.model_checkpoint_path)
+                shutil.rmtree(CKPT_PATH) # delete old checkpoints
+            else:
+                print("\nWARNING: No TF checkpoint files found... DQN initialized from scratch\n")
         
         # training
         for episode in range(1, EPISODES+1):
 
+            print("\nEPISODE", episode)
+
             state = env.reset()
-            total_reward = 0
             step = 0          
             
             while step < MAX_STEPS:
@@ -226,45 +245,43 @@ if __name__ == '__main__':
                 if np.random.rand() < epsilon: # EXPLORE
                     action = env.choose_random_action()                   
                 else:                          # EXPLOIT
-                    q_values = sess.run(mainQN.output, feed_dict={mainQN.inputs_: [state]})[0]                  
-                    action = np.random.choice([idx for idx, val in enumerate(q_values) if val == np.max(q_values)])             
+                    q_values = sess.run(mainQN.output, feed_dict={mainQN.inputs_: [env.normalized(state)]})[0]           
+                    action = np.random.choice([idx for idx, val in enumerate(q_values) if val == np.max(q_values)])   
                 
-                next_state, reward, done = env.insta_step(action)
-                memory.add((state, action, reward, next_state, done))                     
-                total_reward += reward
+                next_state, reward, exited, terminate = env.step(action)
+                memory.add((env.normalized(state), action, reward, env.normalized(next_state), exited))           
                 step += 1
-                state = next_state             
-                        
-                if done:
-                    control.stop()
-                    break
+                state = next_state          
             
                 if len(memory.buffer) == MEM_SIZE and step%TRAIN_STEP==0:
                     # Sample mini-batch from memory
                     batch = memory.sample(BATCH_SIZE)
-                    states = [mem[0] for mem in batch]
+                    normalized_states = [mem[0] for mem in batch]
                     actions = [mem[1] for mem in batch]
                     rewards = [mem[2] for mem in batch]
-                    next_states = [mem[3] for mem in batch]
-                    finish = [mem[4] for mem in batch]
+                    normalized_next_states = [mem[3] for mem in batch]
+                    finish = np.array([mem[4] for mem in batch])
                     
                     # Train network
-                    target_Qs = sess.run(targetQN.output, feed_dict={targetQN.inputs_: next_states})
+                    target_Qs = sess.run(targetQN.output, feed_dict={targetQN.inputs_: normalized_next_states})
                     ####End state has 0 action values
                     target_Qs[finish == True] = 0.
                                         
                     #TRFL way, calculate td_error within TRFL
-                    loss = sess.run(mainQN.loss, feed_dict={mainQN.inputs_: states, mainQN.targetQs_: target_Qs,
+                    loss = sess.run([mainQN.loss, mainQN.opt], feed_dict={mainQN.inputs_: normalized_states, mainQN.targetQs_: target_Qs,
                                                             mainQN.reward: rewards, mainQN.actions_: actions})
 
-            if len(memory.buffer) == MEM_SIZE:
-                print("Episode: {}, Loss: {}, steps per episode: {}".format(episode, loss, step))
-                
+                if terminate:
+                    break
+
+            if step >= MAX_STEPS:
+                print("RESULT: stepped out")
+
             if episode % SAVE_STEP ==0:
-                checkpoint_manager.save(sess, os.path.join(ckpt_path, "positional_DQN.ckpt"), global_step=episode)
+                checkpoint_manager.save(sess, os.path.join(CKPT_PATH, "positional_DQN.ckpt"), global_step=episode)
             
             #update target q network
             if episode % UPDATE_TARGET_EVERY ==0:
                 sess.run(target_network_update_ops)
           
-        checkpoint_manager.save(sess, os.path.join(ckpt_path, "positional_DQN.ckpt"), global_step=EPISODES)
+        checkpoint_manager.save(sess, os.path.join(CKPT_PATH, "positional_DQN.ckpt"), global_step=EPISODES)
