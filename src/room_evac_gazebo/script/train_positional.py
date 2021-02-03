@@ -27,15 +27,16 @@ BATCH_SIZE = 50
 
 # Target Q-Network:
 UPDATE_TARGET_EVERY = 1   
-TAU = 0.1 # target update factor     
-SAVE_STEP = 10000             
-TRAIN_STEP = 1            
+TAU = 0.1 # target update factor                  
+TRAIN_STEP = 1    
+
+SAVE_STEP = 100
 CKPT_PATH = './tf_checkpoints/positional_DQN'
 
 # Enviroment
-AGENT_SIZE = 0.1*FOOT
+AGENT_SIZE = 0
 EXITS = [[0, 4*FOOT]]
-EXIT_WIDTH = 1*FOOT
+EXIT_WIDTH = 0.5
 
 class Environment:
     def __init__(self, xmin, xmax, ymin, ymax, step_size = 0.5*FOOT):
@@ -51,7 +52,7 @@ class Environment:
         self.ymax_traversable = ymax - AGENT_SIZE
 
         if USE_GAZEBO:
-            self.teleport = Teleport()
+            self.teleport = Teleport(ros_rate=100)
 
         self.step_size = step_size
         self.action_space = np.array([np.pi/2, 3*np.pi/4, np.pi, -3*np.pi/4,
@@ -61,12 +62,12 @@ class Environment:
 
         self.x = np.random.uniform(self.xmin_traversable, self.xmax_traversable)
         self.y = np.random.uniform(self.ymin_traversable, self.ymax_traversable)
-        heading = np.random.uniform(-np.pi,np.pi)
+        self.heading = np.random.uniform(-np.pi,np.pi)
 
         if USE_GAZEBO:
-            collision = self.teleport.to(self.x, self.y, heading)
+            successful = self.teleport.to(self.x, self.y, self.heading)
 
-            if collision:
+            if not successful:
                 print("collision on reset, trying again...")
                 return self.reset()
 
@@ -85,33 +86,39 @@ class Environment:
 
         last_x = self.x
         last_y = self.y
+        last_heading = self.heading
 
-        angle = self.action_space[action]
-        self.x += self.step_size * math.cos(angle)
-        self.y += self.step_size * math.sin(angle)
+        self.heading = self.action_space[action]
+        self.x += self.step_size * math.cos(self.heading)
+        self.y += self.step_size * math.sin(self.heading)
         
         if USE_GAZEBO:
-            collision = self.teleport.to(self.x, self.y, angle)
+            successful = self.teleport.to(self.x, self.y, self.heading)
 
-            if collision:
-                print ("RESULT: collision after teleporting to ({:.2f},{:.2f})".format(self.x, self.y))
-                return [last_x, last_y], STEP_RWD, False, True
+            if not successful:
+                self.x = last_x 
+                self.y = last_y
+                self.heading = last_heading
+                successful = self.teleport.to(self.x, self.y, self.heading)
+                if not successful:
+                    print("ERROR: failure to recover after collision at ({:.2f},{:.2f})".format(self.x, self.y))
+                    return [self.x, self.y], STEP_RWD, False, True
+                return [self.x, self.y], STEP_RWD, False, False
 
         if self.exited():
             print("RESULT: exit")
             return [self.x, self.y], EXIT_RWD, True, True
         
         if self.out_of_bounds():
-            print("RESULT: out of bounds")
-            return [last_x, last_y], STEP_RWD, False, True
+            print("RESULT: out of bounds at ({:.2f},{:.2f})".format(self.x, self.y))
+            return [self.x, self.y], STEP_RWD, False, True
 
         return [self.x, self.y], STEP_RWD, False, False
 
     def exited(self):
 
         for e in EXITS:
-            exit_dist =  math.sqrt((e[0] - self.x)**2 + (e[1] - self.y)**2)
-            if exit_dist < EXIT_WIDTH/2:
+            if self.y > e[1] and self.x < EXIT_WIDTH/2 and self.x > -EXIT_WIDTH/2:
                 return True
         return False
     
@@ -275,7 +282,7 @@ if __name__ == '__main__':
                     break
 
             if step >= MAX_STEPS:
-                print("RESULT: stepped out")
+                print("RESULT: took too many steps")
 
             if episode % SAVE_STEP ==0:
                 checkpoint_manager.save(sess, os.path.join(CKPT_PATH, "positional_DQN.ckpt"), global_step=episode)

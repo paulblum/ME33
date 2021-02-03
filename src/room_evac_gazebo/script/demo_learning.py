@@ -34,9 +34,9 @@ class Environment:
         self.y = np.random.uniform(self.ymin_traversable, self.ymax_traversable)
         self.heading = np.random.uniform(-np.pi,np.pi)
 
-        collision = self.teleport.to(self.x, self.y, self.heading)
+        successful = self.teleport.to(self.x, self.y, self.heading)
 
-        if collision:
+        if not successful:
             print("collision on reset, trying again...")
             return self.reset()
 
@@ -51,9 +51,9 @@ class Environment:
         self.x += self.step_size * math.cos(self.heading)
         self.y += self.step_size * math.sin(self.heading)
         
-        collision = self.teleport.to(self.x, self.y, self.heading)
+        successful = self.teleport.to(self.x, self.y, self.heading)
 
-        if collision:
+        if not successful:
             print("RESULT: wall collision at ({:.2f},{:.2f})".format(self.x, self.y))
             return [self.x, self.y], True
 
