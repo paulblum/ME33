@@ -1,0 +1,14 @@
+material red_gradient
+{
+    receive_shadows off
+    technique
+    {
+        pass
+        {
+            texture_unit
+            {
+                texture red_gradient.png
+            }
+        }
+    }
+}
