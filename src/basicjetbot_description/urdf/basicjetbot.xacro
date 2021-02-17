@@ -111,4 +111,31 @@
     <axis xyz="0 1 0"/>
   </joint>
 
+  <!-- CAMERA -->
+  <link name="camera">
+    <visual>
+      <geometry>
+        <box size="0.01 0.01 0.01"/>
+      </geometry>
+    </visual>
+
+    <collision>
+      <geometry>
+        <box size="0.01 0.01 0.01"/>
+      </geometry>
+    </collision>
+
+    <inertial>
+      <mass value="0" />
+      <inertia ixx="0" ixy="0" ixz="0" iyy="0" iyz="0" izz="0" />
+    </inertial>
+  </link>
+
+  <joint name="camera_joint" type="fixed">
+    <axis xyz="0 1 0" />
+    <origin xyz="0.0725 0 0.05"/>
+    <parent link="chassis"/>
+    <child link="camera"/>
+  </joint>
+
 </robot>
