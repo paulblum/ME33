@@ -1,0 +1,96 @@
+<?xml version="1.0" ?>
+<sdf version="1.5">
+
+  <!-- evac_room (8ft x 8ft, single exit) // SDF MODEL DEFINITION -->
+  <model name="evac_room">
+    <static>true</static>
+    <link name="walls">
+
+      <visual name="wall_NW_visual">
+        <pose>-0.7346 1.3192 0.1 0 0 0</pose>
+        <geometry>
+          <box>
+            <size>0.9692 0.2 0.2</size>
+          </box>
+        </geometry>
+      </visual>
+      <collision name="wall_NW_collision">
+        <pose>-0.7346 1.3192 0.1 0 0 0</pose>
+        <geometry>
+          <box>
+            <size>0.9692 0.2 0.2</size>
+          </box>
+        </geometry>
+      </collision>
+
+      <visual name="wall_NE_visual">
+        <pose>0.7346 1.3192 0.1 0 0 0</pose>
+        <geometry>
+          <box>
+            <size>0.9692 0.2 0.2</size>
+          </box>
+        </geometry>
+      </visual>
+      <collision name="wall_NE_collision">
+        <pose>0.7346 1.3192 0.1 0 0 0</pose>
+        <geometry>
+          <box>
+            <size>0.9692 0.2 0.2</size>
+          </box>
+        </geometry>
+      </collision>
+
+      <visual name="wall_E_visual">
+        <pose>1.3192 0 0.1 0 0 0</pose>
+        <geometry>
+          <box>
+            <size>0.2 2.4384 0.2</size>
+          </box>
+        </geometry>
+      </visual>
+      <collision name="wall_E_collision">
+        <pose>1.3192 0 0.1 0 0 0</pose>
+        <geometry>
+          <box>
+            <size>0.2 2.4384 0.2</size>
+          </box>
+        </geometry>
+      </collision>
+
+      <visual name="wall_S_visual">
+        <pose>0 -1.3192 0.1 0 0 0</pose>
+        <geometry>
+          <box>
+            <size>2.4384 0.2 0.2</size>
+          </box>
+        </geometry>
+      </visual>
+      <collision name="wall_S_collision">
+        <pose>0 -1.3192 0.1 0 0 0</pose>
+        <geometry>
+          <box>
+            <size>2.4384 0.2 0.2</size>
+          </box>
+        </geometry>
+      </collision>
+
+      <visual name="wall_W_visual">
+        <pose>-1.3192 0 0.1 0 0 0</pose>
+        <geometry>
+          <box>
+            <size>0.2 2.4384 0.2</size>
+          </box>
+        </geometry>
+      </visual>
+      <collision name="wall_W_collision">
+        <pose>-1.3192 0 0.1 0 0 0</pose>
+        <geometry>
+          <box>
+            <size>0.2 2.4384 0.2</size>
+          </box>
+        </geometry>
+      </collision>
+
+    </link>
+  </model>
+</sdf>

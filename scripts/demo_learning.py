@@ -7,12 +7,12 @@ CKPT_PATH = './tf_checkpoints/positional_DQN'
 EPISODES = 100
 MAX_STEPS = 100 # per episode
 
-AGENT_SIZE = 0
+AGENT_SIZE = 0.1
 EXITS = [[0, 4*FOOT]]
-EXIT_WIDTH = 1*FOOT
+EXIT_WIDTH = 0.5
 
 class Environment:
-    def __init__(self, xmin, xmax, ymin, ymax, step_size = 0.25*FOOT):
+    def __init__(self, xmin, xmax, ymin, ymax, step_size = 0.1*FOOT):
         self.xmin = xmin
         self.xmax = xmax
         self.ymin = ymin
@@ -23,7 +23,7 @@ class Environment:
         self.ymin_traversable = ymin + AGENT_SIZE
         self.ymax_traversable = ymax - AGENT_SIZE
 
-        self.teleport = Teleport(ros_rate=40)
+        self.teleport = Teleport(ros_rate=80)
 
         self.step_size = step_size
         self.action_space = np.array([np.pi/2, 3*np.pi/4, np.pi, -3*np.pi/4,
@@ -75,8 +75,8 @@ class Environment:
         return False
     
     def out_of_bounds(self):
-        if self.x < self.xmin_traversable or self.x > self.xmax_traversable \
-            or self.y < self.ymin_traversable or self.y > self.ymax_traversable:
+        if self.x < self.xmin or self.x > self.xmax \
+            or self.y < self.ymin or self.y > self.ymax:
             return True
         return False
 

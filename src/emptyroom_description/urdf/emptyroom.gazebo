@@ -1,7 +1,0 @@
-<?xml version="1.0"?>
-<!-- emptyroom // SDF GAZEBO PARAMETERS -->
-<robot>
-  <gazebo>
-    <static>true</static>
-  </gazebo>
-</robot>
