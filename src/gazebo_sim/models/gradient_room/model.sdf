@@ -1,16 +1,16 @@
-<?xml version="1.0" ?>
+<?xml version="1.0"?>
 <sdf version="1.5">
 
-  <!-- gradient_room (2m x 2m, gradient RGBK walls) // SDF MODEL DEFINITION -->
+  <!-- gradient_room (8ft x 8ft, single exit, gradient RGBK walls) // SDF MODEL DEFINITION -->
   <model name="gradient_room">
     <static>true</static>
     <link name="walls">
 
-      <visual name="wall_N_visual">
-        <pose>0 1.005 0.25 0 0 0</pose>
+      <visual name="wall_NW_visual">
+        <pose>-0.7346 1.3192 0.1 0 0 0</pose>
         <geometry>
           <box>
-            <size>2 0.01 0.5</size>
+            <size>0.9692 0.2 0.2</size>
           </box>
         </geometry>
         <material>
@@ -21,20 +21,44 @@
           </script>
         </material>
       </visual>
-      <collision name="wall_N_collision">
-        <pose>0 1.005 0.25 0 0 0</pose>
+      <collision name="wall_NW_collision">
+        <pose>-0.7346 1.3192 0.1 0 0 0</pose>
         <geometry>
           <box>
-            <size>2 0.01 0.5</size>
+            <size>0.9692 0.2 0.2</size>
+          </box>
+        </geometry>
+      </collision>
+
+      <visual name="wall_NE_visual">
+        <pose>0.7346 1.3192 0.1 0 0 0</pose>
+        <geometry>
+          <box>
+            <size>0.9692 0.2 0.2</size>
+          </box>
+        </geometry>
+        <material>
+          <script>
+            <uri>model://gradient_room/materials/scripts</uri>
+            <uri>model://gradient_room/materials/textures</uri>
+            <name>green_gradient_flip</name>
+          </script>
+        </material>
+      </visual>
+      <collision name="wall_NE_collision">
+        <pose>0.7346 1.3192 0.1 0 0 0</pose>
+        <geometry>
+          <box>
+            <size>0.9692 0.2 0.2</size>
           </box>
         </geometry>
       </collision>
 
       <visual name="wall_E_visual">
-        <pose>1.005 0 0.25 0 0 0</pose>
+        <pose>1.3192 0 0.1 0 0 0</pose>
         <geometry>
           <box>
-            <size>0.01 2 0.5</size>
+            <size>0.2 2.4384 0.2</size>
           </box>
         </geometry>
         <material>
@@ -46,19 +70,19 @@
         </material>
       </visual>
       <collision name="wall_E_collision">
-        <pose>1.005 0 0.25 0 0 0</pose>
+        <pose>1.3192 0 0.1 0 0 0</pose>
         <geometry>
           <box>
-            <size>0.01 2 0.5</size>
+            <size>0.2 2.4384 0.2</size>
           </box>
         </geometry>
       </collision>
 
       <visual name="wall_S_visual">
-        <pose>0 -1.005 0.25 0 0 0</pose>
+        <pose>0 -1.3192 0.1 0 0 0</pose>
         <geometry>
           <box>
-            <size>2 0.01 0.5</size>
+            <size>2.4384 0.2 0.2</size>
           </box>
         </geometry>
         <material>
@@ -70,19 +94,19 @@
         </material>
       </visual>
       <collision name="wall_S_collision">
-        <pose>0 -1.005 0.25 0 0 0</pose>
+        <pose>0 -1.3192 0.1 0 0 0</pose>
         <geometry>
           <box>
-            <size>2 0.01 0.5</size>
+            <size>2.4384 0.2 0.2</size>
           </box>
         </geometry>
       </collision>
 
       <visual name="wall_W_visual">
-        <pose>-1.005 0 0.25 0 0 0</pose>
+        <pose>-1.3192 0 0.1 0 0 0</pose>
         <geometry>
           <box>
-            <size>0.01 2 0.5</size>
+            <size>0.2 2.4384 0.2</size>
           </box>
         </geometry>
         <material>
@@ -94,10 +118,10 @@
         </material>
       </visual>
       <collision name="wall_W_collision">
-        <pose>-1.005 0 0.25 0 0 0</pose>
+        <pose>-1.3192 0 0.1 0 0 0</pose>
         <geometry>
           <box>
-            <size>0.01 2 0.5</size>
+            <size>0.2 2.4384 0.2</size>
           </box>
         </geometry>
       </collision>

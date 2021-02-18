@@ -1,0 +1,14 @@
+material green_gradient_flip
+{
+    receive_shadows off
+    technique
+    {
+        pass
+        {
+            texture_unit
+            {
+                texture green_gradient_flip.png
+            }
+        }
+    }
+}
