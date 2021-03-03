@@ -1,0 +1,261 @@
+<?xml version="1.0"?>
+<sdf version="1.5">
+
+<!-- basicjetbot // SDF MODEL DEFINITION -->
+  <model name="basicjetbot">
+    <!-- CHASSIS -->
+    <link name="chassis">
+      <inertial>
+        <pose>0 0 0.045 0 0 0</pose>
+        <mass>1.1515</mass>
+        <inertia>
+          <ixx>0.00142978</ixx>
+          <iyy>0.00235098</iyy>
+          <izz>0.00284037</izz>
+        </inertia>
+      </inertial>
+      <visual name="chassis_visual">
+        <pose>0 0 0.045 0 0 0</pose>
+        <geometry>
+          <box>
+            <size>0.14 0.1 0.07</size>
+          </box>
+        </geometry>
+        <material>
+          <script>
+            <name>Gazebo/Red</name>
+          </script>
+        </material>
+      </visual>
+      <collision name="chassis_collision">
+        <pose>0.015 0 0.055 0 0 0</pose>
+        <geometry>
+          <box>
+            <size>0.18 0.16 0.09</size>
+          </box>
+        </geometry>
+      </collision>
+
+    <!-- CASTER -->
+      <visual name="caster_visual">
+        <pose>-0.055 0 0.0075 0 0 0</pose>
+        <geometry>
+          <sphere>
+            <radius>0.0075</radius>
+          </sphere>
+        </geometry>
+        <material>
+          <script>
+            <name>Gazebo/Grey</name>
+          </script>
+        </material>
+      </visual>
+      <collision name="caster_collision">
+        <pose>-0.055 0 0.0075 0 0 0</pose>
+        <geometry>
+          <sphere>
+            <radius>0.0075</radius>
+          </sphere>
+        </geometry>
+        <surface>
+          <friction>
+            <ode>
+              <mu>0</mu>
+              <mu2>0</mu2>
+            </ode>
+          </friction>
+        </surface>
+      </collision>
+
+    <!-- CAMERA -->
+      <visual name="camera-support_visual">
+        <pose>0.065 0.01 0.08 1.5707 0 0</pose>
+        <geometry>
+          <polyline>
+            <point>0 0</point>
+            <point>0.0195 0</point>
+            <point>0.02682 0.02</point>
+            <point>0.02414 0.02</point>
+            <point>0.01773 0.0025</point>
+            <point>0 0.0025</point>
+            <height>0.02</height>
+          </polyline>
+        </geometry>
+        <material>
+          <script>
+            <name>Gazebo/DarkGrey</name>
+          </script>
+        </material>
+      </visual>
+      <visual name="camera_visual">
+        <pose>0.09 0 0.09 0 1.919766 0</pose>
+        <geometry>
+          <cylinder>
+            <radius>0.005</radius>
+            <length>0.005</length>
+          </cylinder>
+        </geometry>
+        <material>
+          <script>
+            <name>Gazebo/SkyBlue</name>
+          </script>
+        </material>
+      </visual>
+      <sensor type="camera" name="camera">
+        <pose>0.09 0 0.09 0 0.349066 0</pose>
+        <update_rate>30</update_rate>
+        <camera name="head">
+          <horizontal_fov>2.37365</horizontal_fov>
+          <image>
+            <width>8</width>
+            <height>8</height>
+            <format>R8G8B8</format>
+          </image>
+          <clip>
+            <near>0.02</near>
+            <far>300</far>
+          </clip>
+        </camera>
+        <plugin name="camera_controller" filename="libgazebo_ros_camera.so">
+          <alwaysOn>true</alwaysOn>
+          <updateRate>0</updateRate>
+          <cameraName>basicjetbot/camera</cameraName>
+          <imageTopicName>image_raw</imageTopicName>
+          <frameName>camera</frameName>
+          <hackBaseline>0.07</hackBaseline>
+          <distortionK1>0.0</distortionK1>
+          <distortionK2>0.0</distortionK2>
+          <distortionK3>0.0</distortionK3>
+          <distortionT1>0.0</distortionT1>
+          <distortionT2>0.0</distortionT2>
+        </plugin>
+      </sensor>
+
+    <!-- COLLISION SENSOR -->
+      <sensor type="contact" name="contact_sensor">
+        <update_rate>100</update_rate>
+        <contact>
+          <collision>chassis_collision</collision>
+        </contact>
+        <plugin name="gazebo_ros_bumper_controller" filename="libgazebo_ros_bumper.so">
+          <updateRate>0</updateRate>
+          <bumperTopicName>/basicjetbot/contact_sensor</bumperTopicName>
+        </plugin>
+      </sensor>
+    </link>
+
+    <!-- WHEELS -->
+    <link name="left_wheel">
+      <inertial>
+        <pose>0.045 0.0625 0.0325 1.5707 0 0</pose>
+        <mass>0.09747528</mass>
+        <inertia>
+          <ixx>0.00003082</ixx>
+          <iyy>0.00003082</iyy>
+          <izz>0.00005148</izz>
+        </inertia>
+      </inertial>
+      <visual name="left-wheel_visual">
+        <pose>0.045 0.0625 0.0325 1.5707 0 0</pose>
+        <geometry>
+          <cylinder>
+            <radius>0.0325</radius>
+            <length>0.025</length>
+          </cylinder>
+        </geometry>
+        <material>
+          <script>
+            <name>Gazebo/DarkGrey</name>
+          </script>
+        </material>
+      </visual>
+      <collision name="left-wheel_collision">
+        <pose>0.045 0.0625 0.0325 1.5707 0 0</pose>
+        <geometry>
+          <cylinder>
+            <radius>0.0325</radius>
+            <length>0.025</length>
+          </cylinder>
+        </geometry>
+      </collision>
+    </link>
+
+    <link name="right_wheel">
+      <inertial>
+        <pose>0.045 -0.0625 0.0325 1.5707 0 0</pose>
+        <mass>0.09747528</mass>
+        <inertia>
+          <ixx>0.00003082</ixx>
+          <iyy>0.00003082</iyy>
+          <izz>0.00005148</izz>
+        </inertia>
+      </inertial>
+      <visual name="right-wheel_visual">
+        <pose>0.045 -0.0625 0.0325 1.5707 0 0</pose>
+        <geometry>
+          <cylinder>
+            <radius>0.0325</radius>
+            <length>0.025</length>
+          </cylinder>
+        </geometry>
+        <material>
+          <script>
+            <name>Gazebo/DarkGrey</name>
+          </script>
+        </material>
+      </visual>
+      <collision name="right-wheel_collision">
+        <pose>0.045 -0.0625 0.0325 1.5707 0 0</pose>
+        <geometry>
+          <cylinder>
+            <radius>0.0325</radius>
+            <length>0.025</length>
+          </cylinder>
+        </geometry>
+      </collision>
+    </link>
+
+    <!-- MOTORS -->
+    <joint type="revolute" name="left_motor">
+      <pose>0.045 0.0625 0.0325 0 0 0</pose>
+      <child>left_wheel</child>
+      <parent>chassis</parent>
+      <axis>
+        <xyz>0 1 0</xyz>
+      </axis>
+    </joint>
+
+    <joint type="revolute" name="right_motor">
+      <pose>0.045 -0.0625 0.0325 0 0 0</pose>
+      <child>right_wheel</child>
+      <parent>chassis</parent>
+      <axis>
+        <xyz>0 1 0</xyz>
+      </axis>
+    </joint>
+
+    <!-- DIFFDRIVE PLUGIN -->
+    <plugin name="differential_drive_controller" filename="libgazebo_ros_diff_drive.so">
+      <alwaysOn>true</alwaysOn>
+      <updateRate>20</updateRate>
+      <leftJoint>left_motor</leftJoint>
+      <rightJoint>right_motor</rightJoint>
+      <wheelSeparation>0.125</wheelSeparation>
+      <wheelDiameter>0.065</wheelDiameter>
+      <wheelTorque>5</wheelTorque>
+      <wheelAcceleration>0</wheelAcceleration>
+      <robotNamespace>basicjetbot</robotNamespace>
+      <robotBaseFrame>chassis</robotBaseFrame>
+      <commandTopic>cmd_vel</commandTopic>
+      <odometryTopic>odom</odometryTopic>
+      <odometryFrame>odom</odometryFrame>
+      <odometrySource>world</odometrySource>
+      <publishWheelTF>false</publishWheelTF>
+      <publishOdomTF>false</publishOdomTF>
+      <publishWheelJointState>false</publishWheelJointState>
+      <publishTf>false</publishTf>
+      <rosDebugLevel>na</rosDebugLevel>
+    </plugin>
+
+  </model>
+</sdf>
