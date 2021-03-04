@@ -12,18 +12,18 @@ class PythonGazebo:
     """
     A collection of services for controlling a Gazebo robot via Python.
     """
-    
+
     def __init__(self, model_name="basicjetbot", ros_rate=10):
         self.model_name = model_name
 
         rospy.init_node('python_gazebo')
 
         self.model_state_subscriber = rospy.Subscriber('/gazebo/model_states', ModelStates, self._state)
-        self.contact_sensor_subscriber = rospy.Subscriber('/contact_sensor', ContactsState, self._collision)
-        self.camera_subscriber = rospy.Subscriber('/basicjetbot/image_raw', Image, self._image)
+        self.contact_sensor_subscriber = rospy.Subscriber('/{}/contact_sensor'.format(model_name), ContactsState, self._collision)
+        self.camera_subscriber = rospy.Subscriber('/{}/camera/image_raw'.format(model_name), Image, self._image)
 
         self.model_state_publisher = rospy.Publisher('/gazebo/set_model_state', ModelState, queue_size=1)
-        self.cmd_vel_publisher = rospy.Publisher('cmd_vel', Twist, queue_size=1)
+        self.cmd_vel_publisher = rospy.Publisher('/{}/cmd_vel'.format(model_name), Twist, queue_size=1)
 
         self.r = rospy.Rate(ros_rate)
         self.r.sleep()
@@ -44,37 +44,38 @@ class PythonGazebo:
     def rotate_to(self, heading, tol=0.04, max_speed=4, kP=10):
         """
         Command the robot to rotate itself to some absolute heading, then stop.
-        Returns the robot's final positional state.
+        Returns the robot's final positional state and a collision flag.
         Parameters:
             heading: target heading (radians, absolute)
             tol: final heading tolerance (radians)
             max_speed: maximum rotational speed (radians/second)
             kP: proportional gain constant
         Returns:
-            [float] final x-coordinate (meters)
-            [float] final y-coordinate (meters)
-            [float] final heading (radians)
+            [tuple]
+             | [float] final x-coordinate (meters)
+             | [float] final y-coordinate (meters)
+             | [float] final heading (radians)
+            [bool] collision detected? (T/F)
         """
         cmd = Twist()
 
         while not self.collision:
             err = normalize(heading - self.heading)
-            
+
             if abs(err) < tol:
-                return self.stop()
-            
+                return self.stop(), self.collision
+
             cmd.angular.z = min(max(kP * err, -max_speed), max_speed)
 
             self.cmd_vel_publisher.publish(cmd)
             self.r.sleep()
-        
-        print("\n***** WARNING: collision detected *****\n")
-        return self.stop()
+
+        return self.stop(), True
 
     def move_to(self, x, y, tol = 0.04, max_speed = 0.6, kP_lin = 1.5, kP_rot = 7.0):
         """
         Command the robot to move itself to a set of absolute x-y coordinates, then stop.
-        Returns the robot's final positional state.
+        Returns the robot's final positional state and a collision flag.
         Parameters:
             x: target x-coordinate (meters, absolute)
             y: target y-coordinate (meters, absolute)
@@ -82,22 +83,23 @@ class PythonGazebo:
             max_speed: maximum linear speed (meters/second)
             kP_lin: proportional gain constant for linear movement
             kP_rot: proportional gain constant for rotational corrections
-        
         Returns:
-            [float] final x-coordinate (meters)
-            [float] final y-coordinate (meters)
-            [float] final heading (radians)
+            [tuple]
+             | [float] final x-coordinate (meters)
+             | [float] final y-coordinate (meters)
+             | [float] final heading (radians)
+            [bool] collision detected? (T/F)
         """
         cmd = Twist()
 
-        self.rotate_to(math.atan2(y - self.y, x - self.x), tol = 0.07)
+        self.rotate_to(math.atan2(y - self.y, x - self.x))
 
         while not self.collision:
             err = math.sqrt((x - self.x)**2 + (y - self.y)**2)
 
             if err < tol:
                 return self.stop(), self.collision
-            
+
             x_err = x - self.x
             y_err = y - self.y
             cmd.angular.z = kP_rot * normalize(math.atan2(y_err, x_err) - self.heading)
@@ -105,41 +107,24 @@ class PythonGazebo:
 
             self.cmd_vel_publisher.publish(cmd)
             self.r.sleep()
-            
-        print("\n***** WARNING: collision detected *****\n")
-        return self.stop(), self.collision
 
-    def move_forward(self, distance, tol = 0.04, max_speed = 0.6, kP_lin = 1.5, kP_rot = 7.0):
-        """
-        Command the robot to move itself forward some distance, then stop.
-        Returns the robot's final positional state.
-        Parameters:
-            distance: forward distance (meters)
-            tol: final position tolerance (meters)
-            max_speed: maximum linear speed (meters/second)
-            kP_lin: proportional gain constant for linear movement
-            kP_rot: proportional gain constant for rotational corrections
-        
-        Returns:
-            [float] final x-coordinate (meters)
-            [float] final y-coordinate (meters)
-            [float] final heading (radians)
-        """
-        x_target = self.x + distance * math.cos(self.heading)
-        y_target = self.y + distance * math.sin(self.heading)
-        return self.move_to(x_target, y_target, tol, max_speed, kP_lin, kP_rot)
+        return self.stop(), True
 
-        
-    def teleport_to(self, x, y, heading, tol = 0.01):
+    def teleport_to(self, x, y, heading):
         """
         Instantly move the robot to a specified poisition.
+        Returns the robot's final positional state.
+        Note: The robot will not accurately teleport into a collision state. Error greater
+            than 0.01 between target and final coordinates typically indicates that a collision
+            occurred at the target.
         Parameters:
             x: target x-coord (meters, absolute)
             y: target y-coord (meters, absolute)
             heading: target heading (radians, absolute)
-            tol: desired tolerance
         Returns:
-            [bool] destination within tolerance? (T/F)
+            [float] final x-coordinate (meters)
+            [float] final y-coordinate (meters)
+            [float] final heading (radians)
         """
         state = ModelState()
         state.model_name = self.model_name
@@ -152,22 +137,19 @@ class PythonGazebo:
         self.model_state_publisher.publish(state)
         self.r.sleep()
         self.r.sleep() #huh
-        
-        x_err = abs(x - self.x)
-        y_err = abs(y - self.y)
-        head_err = abs(normalize(heading - self.heading))
-        return (x_err < tol and y_err < tol and head_err < 10*tol)
-    
+
+        return self.stop()
+
     def get_raw_image(self):
         """
         Returns the robot's most recently transmitted image data as a list.
         Returns:
             [list] raw rgb image data
         """
+        self.r.sleep()
         return self.img
 
-
-    # ---------- Internal functions called automatically by ROS ----------
+    # --- internal functions (called automatically by ROS) ---
     def _state(self, msg):
         """
         Called automatically via subscription to '/gazebo/model_states' ROS channel.
@@ -177,21 +159,21 @@ class PythonGazebo:
         pos = pose.position
         q = pose.orientation
         *_, yaw = quaternion_to_euler(q.x, q.y, q.z, q.w)
-        
+
         self.x = pos.x
         self.y = pos.y
         self.heading = yaw
 
     def _collision(self, msg):
         """
-        Called automatically via subscription to '/contact_sensor' ROS channel.
+        Called automatically via subscription to '/{model_name}/contact_sensor' ROS channel.
         Updates internal tracking of the robot's current collision state.
         """
         self.collision = msg.states != []
 
     def _image(self, msg):
         """
-        Called automatically via subscription to '/contact_sensor' ROS channel.
+        Called automatically via subscription to '/{model_name}/camera/image_raw' ROS channel.
         Updates internal tracking of the robot's most recently transmitted camera frame.
         """
         self.img = list(msg.data)
@@ -209,7 +191,7 @@ def normalize(radians):
 def euler_to_quaternion(roll, pitch, yaw):
     """
     Convert a set of Euler angles (roll, pitch, yaw) to a unit quaternion (x, y, z, w).
-    Algorithm source: 
+    Algorithm source:
     https://en.wikipedia.org/wiki/Conversion_between_quaternions_and_Euler_angles#Euler_angles_to_quaternion_conversion
     """
     cr = math.cos(roll/2)
@@ -229,7 +211,7 @@ def euler_to_quaternion(roll, pitch, yaw):
 def quaternion_to_euler(x, y, z, w):
     """
     Convert a unit quaternion (x, y, z, w) to a set of Euler angles (roll, pitch, yaw).
-    Algorithm source: 
+    Algorithm source:
     https://en.wikipedia.org/wiki/Conversion_between_quaternions_and_Euler_angles#Quaternion_to_Euler_angles_conversion
     """
     sr_cp = 2 * (w*x + y*z)

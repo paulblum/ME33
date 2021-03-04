@@ -1,16 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <launch>
 
-  <!-- generate world -->
   <include file="$(find gazebo_ros)/launch/empty_world.launch">
     <arg name="world_name" value="$(find gazebo_sim)/worlds/gradient_room.world"/>
   </include>
-
-  <!-- import models -->
-  <param name="basicjetbot_description" command="$(find xacro)/xacro '$(find basicjetbot_description)/urdf/basicjetbot.xacro'"/>
-
-  <!-- spawn models -->
-  <node name="basicjetbot" pkg="gazebo_ros" type="spawn_model" output="screen"
-   args="-urdf -param basicjetbot_description -model basicjetbot" />
 
 </launch>

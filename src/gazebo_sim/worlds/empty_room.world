@@ -10,6 +10,9 @@
     <include>
       <uri>model://evac_room</uri>
     </include>
+    <include>
+      <uri>model://basicjetbot</uri>
+    </include>
 
     <!-- A camera, focused down at the origin from above -->
     <gui>

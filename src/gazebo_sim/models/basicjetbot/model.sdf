@@ -133,7 +133,7 @@
 
     <!-- COLLISION SENSOR -->
       <sensor type="contact" name="contact_sensor">
-        <update_rate>100</update_rate>
+        <update_rate>1000</update_rate>
         <contact>
           <collision>chassis_collision</collision>
         </contact>
@@ -145,7 +145,7 @@
     </link>
 
     <!-- WHEELS -->
-    <link name="left_wheel">
+    <link name="left-wheel">
       <inertial>
         <pose>0.045 0.0625 0.0325 1.5707 0 0</pose>
         <mass>0.09747528</mass>
@@ -180,7 +180,7 @@
       </collision>
     </link>
 
-    <link name="right_wheel">
+    <link name="right-wheel">
       <inertial>
         <pose>0.045 -0.0625 0.0325 1.5707 0 0</pose>
         <mass>0.09747528</mass>
@@ -216,18 +216,18 @@
     </link>
 
     <!-- MOTORS -->
-    <joint type="revolute" name="left_motor">
+    <joint type="revolute" name="left-motor">
       <pose>0.045 0.0625 0.0325 0 0 0</pose>
-      <child>left_wheel</child>
+      <child>left-wheel</child>
       <parent>chassis</parent>
       <axis>
         <xyz>0 1 0</xyz>
       </axis>
     </joint>
 
-    <joint type="revolute" name="right_motor">
+    <joint type="revolute" name="right-motor">
       <pose>0.045 -0.0625 0.0325 0 0 0</pose>
-      <child>right_wheel</child>
+      <child>right-wheel</child>
       <parent>chassis</parent>
       <axis>
         <xyz>0 1 0</xyz>
@@ -238,8 +238,8 @@
     <plugin name="differential_drive_controller" filename="libgazebo_ros_diff_drive.so">
       <alwaysOn>true</alwaysOn>
       <updateRate>20</updateRate>
-      <leftJoint>left_motor</leftJoint>
-      <rightJoint>right_motor</rightJoint>
+      <leftJoint>left-motor</leftJoint>
+      <rightJoint>right-motor</rightJoint>
       <wheelSeparation>0.125</wheelSeparation>
       <wheelDiameter>0.065</wheelDiameter>
       <wheelTorque>5</wheelTorque>
