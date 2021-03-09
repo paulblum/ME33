@@ -10,7 +10,7 @@ RESTORE_CKPT = True
 # ----- SIMULATION PARAMETERS -----
 # Reinforcement Learning:
 EPISODES = 10000
-MAX_STEPS = 1000 # per episode
+MAX_STEPS = 10000 # per episode
 GAMMA = 0.999 # future reward discount
 EXPLORE_MAX = 1.0 # exploration probability
 EXPLORE_MIN = 0.1
@@ -41,7 +41,7 @@ CKPT_NAME = 'camera_test.ckpt'
 
 # Enviroment
 ENV_SIZE = 8*FOOT
-AGENT_SIZE = 0
+AGENT_SIZE = 0.1262
 STEP_SIZE = 0.5*FOOT
 EXIT = [0, 4*FOOT]
 EXIT_WIDTH = 0.5
@@ -53,6 +53,11 @@ class Environment:
         self.x = 0
         self.y = 0
         self.heading = 0
+
+        self.last_x = 0
+        self.last_y = 0
+        self.last_heading = 0
+
         self.action_space = [np.pi/2, 3*np.pi/4, np.pi, -3*np.pi/4,
                                 -np.pi/2, -np.pi/4, 0., np.pi/4]
 
@@ -61,13 +66,13 @@ class Environment:
         y_target = np.random.uniform(-ENV_SIZE/2 + AGENT_SIZE, ENV_SIZE/2 - AGENT_SIZE)
         head_target = self.action_space[np.random.randint(0,8)]
 
-        if self.out_of_bounds(x_target, y_target):
-            print("out of bounds on reset, trying again...")
-            return self.reset()
-
         if not self.teleport_to(x_target, y_target, head_target):
             print("collision on reset, trying again...")
             return self.reset()
+
+        self.last_x = self.x
+        self.last_y = self.y
+        self.last_heading = self.heading
 
         return self.jetbot.get_raw_image()
 
@@ -78,9 +83,6 @@ class Environment:
         x_target = self.x + STEP_SIZE * math.cos(head_target)
         y_target = self.y + STEP_SIZE * math.sin(head_target)
 
-        if self.out_of_bounds(x_target, y_target):
-            return image, STEP_RWD, False, False
-
         if not self.teleport_to(x_target, y_target, head_target):
             return image, STEP_RWD, False, True
 
@@ -89,6 +91,9 @@ class Environment:
         if self.exited(self.x, self.y):
             print("RESULT: exited")
             return image, EXIT_RWD, True, True
+
+        if self.out_of_bounds(x_target, y_target):
+            return image, STEP_RWD, False, False
 
         return image, STEP_RWD, False, False
 
@@ -99,20 +104,44 @@ class Environment:
         y_err = abs(y - y_result)
         head_err = abs(normalize(heading - head_result))
 
-        if abs(math.sqrt(x_err**2 + y_err**2) - STEP_SIZE) < 0.01:# and head_err > 0.5:
-            print("LAG WARNING: ros_rate may be set too high. (1) ", head_err)
+        if abs(x_result - self.x) + abs(y_result - self.y) < 0.01:
+            print("LAG WARNING: ros_rate may be set too high. (1) ")
+
         if x_err > 0.01 or y_err > 0.01 or head_err > 0.01:
             x_result, y_result, head_result = self.jetbot.teleport_to(self.x, self.y, self.heading)
 
             x_err = abs(self.x - x_result)
             y_err = abs(self.y - y_result)
             head_err = abs(normalize(self.heading - head_result))
-            if abs(math.sqrt(x_err**2 + y_err**2) - STEP_SIZE) < 0.01:
-                print("LAG WARNING: you may have ros_rate set too high. (2)")
-            if x_err > 0.01 or y_err > 0.01 or head_err > 0.01:
-                print(x_err, y_err, head_err)
-                print("ERROR: failure to recover after collision at ({:.2f},{:.2f})".format(self.x, self.y))
-                return False
+
+                if x_err > 0.01 or y_err > 0.01 or head_err > 0.01:
+                    x_result, y_result, head_result = self.jetbot.teleport_to(self.last_x, self.last_y, self.last_heading)
+
+                    x_err = abs(self.x - x_result)
+                    y_err = abs(self.y - y_result)
+                    head_err = abs(normalize(self.heading - head_result))
+
+                    if x_err > 0.01 or y_err > 0.01 or head_err > 0.01:
+                        print(x_err, y_err, head_err)
+                        print("ERROR: failure to recover after collision at ({:.2f},{:.2f})".format(self.x, self.y))
+                        return False
+
+                    else:
+                        self.last_x = x_result
+                        self.last_y = y_result
+                        self.last_heading = head_result
+
+                        self.x = x_result
+                        self.y = y_result
+                        self.heading = head_result
+
+                        return True
+                else:
+                    return True
+
+        self.last_x = self.x
+        self.last_y = self.y
+        self.last_heading = self.heading
 
         self.x = x_result
         self.y = y_result
@@ -123,7 +152,7 @@ class Environment:
         return y > EXIT[1] and x < EXIT_WIDTH/2 and x > -EXIT_WIDTH/2
 
     def out_of_bounds(self, x, y):
-        return abs(x) > (ENV_SIZE/2 - AGENT_SIZE) or abs(y) > (ENV_SIZE/2 - AGENT_SIZE)
+        return abs(x) > (ENV_SIZE/2) or abs(y) > (ENV_SIZE/2)
 
     def normalized(self, state):
         return np.array(state)/255
@@ -286,3 +315,4 @@ if __name__ == '__main__':
                 sess.run(target_network_update_ops)
 
         checkpoint_manager.save(sess, os.path.join(CKPT_PATH, CKPT_NAME), global_step=EPISODES)
+        
