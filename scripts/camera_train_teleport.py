@@ -42,7 +42,7 @@ CKPT_NAME = 'camera_test.ckpt'
 # Enviroment
 ENV_SIZE = 8*FOOT
 AGENT_SIZE = 0.1262
-STEP_SIZE = 0.5*FOOT
+STEP_SIZE = AGENT_SIZE/2
 EXIT = [0, 4*FOOT]
 EXIT_WIDTH = 0.5
 
@@ -98,46 +98,64 @@ class Environment:
         return image, STEP_RWD, False, False
 
     def teleport_to(self, x, y, heading):
-        x_result, y_result, head_result = self.jetbot.teleport_to(x, y, heading)
+        x_attempt, y_attempt, head_attempt = self.jetbot.teleport_to(x, y, heading)
+        
+        if x_attempt == self.x and y_attempt == self.y:
+            print("LAG WARNING: ros_rate may be set too high.")
+            while self.jetbot.x == self.x and self.jetbot.y == self.y:
+                self.jetbot.r.sleep()
+
+        x_result, y_result, head_result = self.jetbot.get_state()
 
         x_err = abs(x - x_result)
         y_err = abs(y - y_result)
         head_err = abs(normalize(heading - head_result))
 
-        if abs(x_result - self.x) + abs(y_result - self.y) < 0.01:
-            print("LAG WARNING: ros_rate may be set too high. (1) ")
-
         if x_err > 0.01 or y_err > 0.01 or head_err > 0.01:
-            x_result, y_result, head_result = self.jetbot.teleport_to(self.x, self.y, self.heading)
+            x_attempt, y_attempt, head_attempt = self.jetbot.teleport_to(self.x, self.y, self.heading)
+
+            if x_attempt == x_result and y_attempt == y_result:
+                print("LAG WARNING: ros_rate may be set too high.")
+                while self.jetbot.x == x_result and self.jetbot.y == y_result:
+                    self.jetbot.r.sleep()
+
+            x_result, y_result, head_result = self.jetbot.get_state()
 
             x_err = abs(self.x - x_result)
             y_err = abs(self.y - y_result)
             head_err = abs(normalize(self.heading - head_result))
 
+            if x_err > 0.01 or y_err > 0.01 or head_err > 0.01:
+                x_attempt, y_attempt, head_attempt = self.jetbot.teleport_to(self.last_x, self.last_y, self.last_heading)
+                
+                if x_attempt == x_result and y_attempt == y_result:
+                    print("LAG WARNING: ros_rate may be set too high.")
+                    while self.jetbot.x == x_result and self.jetbot.y == y_result:
+      	                self.jetbot.r.sleep()
+
+       	        x_result, y_result, head_result = self.jetbot.get_state()
+
+                x_err = abs(self.last_x - x_result)
+                y_err = abs(self.last_y - y_result)
+                head_err = abs(normalize(self.last_heading - head_result))
+                
                 if x_err > 0.01 or y_err > 0.01 or head_err > 0.01:
-                    x_result, y_result, head_result = self.jetbot.teleport_to(self.last_x, self.last_y, self.last_heading)
+                    print(x_err, y_err, head_err)
+                    print("ERROR: failure to recover after collision at ({:.2f},{:.2f})".format(self.x, self.y))
+                    return False
 
-                    x_err = abs(self.x - x_result)
-                    y_err = abs(self.y - y_result)
-                    head_err = abs(normalize(self.heading - head_result))
-
-                    if x_err > 0.01 or y_err > 0.01 or head_err > 0.01:
-                        print(x_err, y_err, head_err)
-                        print("ERROR: failure to recover after collision at ({:.2f},{:.2f})".format(self.x, self.y))
-                        return False
-
-                    else:
-                        self.last_x = x_result
-                        self.last_y = y_result
-                        self.last_heading = head_result
-
-                        self.x = x_result
-                        self.y = y_result
-                        self.heading = head_result
-
-                        return True
                 else:
+                    self.last_x = x_result
+                    self.last_y = y_result
+                    self.last_heading = head_result
+
+                    self.x = x_result
+                    self.y = y_result
+                    self.heading = head_result
+
                     return True
+            else:
+                return True
 
         self.last_x = self.x
         self.last_y = self.y
@@ -315,4 +333,3 @@ if __name__ == '__main__':
                 sess.run(target_network_update_ops)
 
         checkpoint_manager.save(sess, os.path.join(CKPT_PATH, CKPT_NAME), global_step=EPISODES)
-        
