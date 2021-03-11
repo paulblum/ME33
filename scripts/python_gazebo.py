@@ -140,6 +140,17 @@ class PythonGazebo:
 
         return self.stop()
 
+    def get_state(self):
+        """
+        Returns the robot's current positional state.
+        Returns:
+            [float] final x-coordinate (meters)
+            [float] final y-coordinate (meters)
+            [float] final heading (radians)
+        """
+        self.r.sleep()
+        return self.x, self.y, self.heading
+
     def get_raw_image(self):
         """
         Returns the robot's most recently transmitted image data as a list.
