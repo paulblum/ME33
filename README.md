@@ -6,7 +6,25 @@
 
 ---
 
-### Run the code:
+## **Contents**
+
+*1.* [**How to use this code**](#1-how-to-use-this-code)
+
+*1.1* [Installation](#11-installation)  
+*1.2* [Launch a simulation in Gazebo](#12-launch-a-simulation-in-gazebo)  
+*1.3* [Control the `basicjetbot` model](#13-control-the-basicjetbot-model)
+
+*2.* [**Documentation**](#2-documentation)
+
+*2.1* [`python_gazebo` documentation](#21-python_gazebo-documentation)
+
+---
+
+## *1.* **How to use this code**
+
+### *1.1* **Installation**
+
+---
 
 1. **This project was designed to be used with Ubuntu 18.04**
 
@@ -33,17 +51,33 @@
     catkin_make -DPYTHON_EXECUTABLE=/usr/bin/python3
     ```
 
-4. **Launch the Simulation in Gazebo**
+---
 
-    In the terminal (still in ME33 directory), enter:
+### *1.2* **Launch a simulation in Gazebo**
+
+---
+
+1. **Activate ME33**
+
+    Before you can launch simulations in any new terminal window, you'll need to activate the ME33 workspace:
 
     ```
-    source devel/setup.bash
+    source ME33/devel/setup.bash
+    ```
 
+2. **Launch a simulation**
+
+    There are three Gazebo simulation worlds available in ME33, each can be launched using its `roslaunch` command:
+
+    ```
     roslaunch gazebo_sim empty_room.launch
+
+    roslaunch gazebo_sim gradient_room.launch
+
+    roslaunch gazebo_sim obstacle_avoidance.launch
     ```
 
-    *Hint:* If you're running on a virtual machine, you may get a GPU-related error after the `roslaunch` command. Enter the following and then try again:
+    *Note:* If you're running on a virtual machine, you may get a GPU-related error when running `roslaunch` for the first time. To fix this, enter the following commands and then try again:
 
     ```
     echo "export SVGA_VGPU10=0" >> ~/.profile
@@ -51,43 +85,53 @@
     export SVGA_VGPU10=0
     ```
 
-    You can close and quit Gazebo by typing <kbd>ctrl</kbd> + <kbd>C</kbd> in this terminal.
+3. **Quit a simulation**
 
-5. **Control the basicjetbot in Python**
-
-    `basicjetbot` can be controlled using a Python interface in the `python_gazebo` script (`ME33/scripts/python_gazebo.py`).
-
-    You can utilize this script to command `basicjetbot` interactively, using a Python shell like `ipython`. To do this, enter the following in a new terminal:
-
-    ```
-    cd ME33/scripts
-
-    ipython3
-    ```
-
-    In the Python shell (or in a script), import `python_gazebo` and then initialize a controller object:
-
-    ```python
-    from python_gazebo import *
-
-    bot = PythonGazebo()
-    ```
-
-    `basicjetbot` can now be controlled in the simulation! Try these commands:
-
-    ```python
-    bot.rotate_to(2)
-
-    bot.move_to(1,1)
-
-    bot.teleport_to(0,0,0)
-    ```
-
-    You can exit `ipython` by entering "`quit`" in the shell.
+    You can close and quit a Gazebo simulation by typing <kbd>ctrl</kbd> + <kbd>C</kbd> in the terminal where it's running.
 
 ---
 
-### Full documentation for the `python_gazebo` interface:
+ ### *1.3* **Control the `basicjetbot` model**
+
+---
+
+`basicjetbot` can be controlled using a Python interface in the `python_gazebo` script (`ME33/scripts/python_gazebo.py`).
+
+You can utilize this script to command `basicjetbot` interactively, using a Python shell like `ipython`. To do this, enter the following in a new terminal:
+
+```
+cd ME33/scripts
+
+ipython3
+```
+
+In the `ipython` shell, import the interface and then initialize a `basicjetbot` controller object:
+
+```python
+from python_gazebo import *
+
+jetbot = PythonGazebo()
+```
+
+`basicjetbot` can now be controlled in a Gazebo simulation! Try these commands:
+
+```python
+jetbot.rotate_to(2)
+
+jetbot.move_to(1,1)
+
+jetbot.teleport_to(0,0,0)
+```
+
+You can exit `ipython` by entering "`quit`" in the shell.
+
+---
+
+## *2.* **Documentation**
+
+### *2.1* **`python_gazebo`** documentation
+
+---
 
 ***class* `PythonGazebo`:**  
 A collection of services for controlling a Gazebo robot via Python.
@@ -172,6 +216,18 @@ A collection of services for controlling a Gazebo robot via Python.
 
     ---
 
+- **`get_state()`:**  
+    Returns the robot's current positional state.
+
+    *Parameters:* None.
+
+    *Returns:*
+    - **[float]** current x-coordinate (meters)
+    - **[float]** current y-coordinate (meters)
+    - **[float]** current heading (radians)
+
+    ---
+
 - **`get_raw_image()`:**  
     Returns the robot's most recently transmitted image data as a list.
 
@@ -226,5 +282,3 @@ Convert a unit quaternion (x, y, z, w) to a set of Euler angles (roll, pitch, ya
 - **[float]** roll (radians)
 - **[float]** pitch (radians)
 - **[float]** yaw (radians)
-
----
